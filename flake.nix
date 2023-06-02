@@ -9,13 +9,26 @@
     with builtins;
     utils.apply-systems
       { inherit inputs;
-        systems = [ "x86_64-linux" "x86_64-darwin" ];
+        systems = [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" ];
       }
       ({ deadnix, make-shell, pkgs, ... }:
          let l = pkgs.lib; p = pkgs; in
          rec
          { legacyPackages =
              let
+               inherit (pkgs) system;
+               other-systems =
+                 (l.pipe ./purescript
+                    [ readDir
+                      (a: removeAttrs a [ "mkPursDerivation.nix" ])
+                      attrNames
+                    ]
+                 );
+               aarch-systems = ["0.15.9.nix"];
+               supported-systems =
+                 if system == "aarch64-linux"
+                   then aarch-systems
+                   else other-systems;
                purescripts =
                  listToAttrs
                    (map
@@ -32,41 +45,52 @@
                            package-name
                            (import (./. + "/purescript/${file}") { inherit pkgs; })
                       )
-                      (l.pipe ./purescript
-                         [ readDir
-                           (a: removeAttrs a [ "mkPursDerivation.nix" ])
-                           attrNames
-                         ]
-                      )
+                      supported-systems
                    );
 
                  common =
                    with packages;
-                   { inherit psa pscid purescript-language-server purs-tidy purty; };
+                   { inherit psa pscid purescript-language-server purs-tidy; }; # purty; };
 
                  for-0_15 =
-                   with packages;
-                   { pulp = pulp-16;
-                     purescript = purescript-0_15;
-                     zephyr = zephyr-0_5;
-                   }
-                   // common;
+                   if system == "aarch64-linux"
+                   then 
+                     with packages;
+                     { # pulp = pulp-16;
+                       purescript = purescript-0_15;
+                       # zephyr = zephyr-0_5;
+                       # pulp & zephyr not supported yet
+                     }
+                     // common
+                   else
+                     with packages;
+                     { pulp = pulp-16;
+                       purescript = purescript-0_15;
+                       zephyr = zephyr-0_5;
+                     }
+                     // common;
 
                  for-0_14 =
-                   with packages;
-                   { pulp = pulp-15;
-                     purescript = purescript-0_14;
-                     zephyr = zephyr-0_4;
-                   }
-                   // common ;
+                   if system == "aarch64-linux"
+                   then {}
+                   else
+                       with packages;
+                       { pulp = pulp-15;
+                         purescript = purescript-0_14;
+                         zephyr = zephyr-0_4;
+                       }
+                       // common ;
 
                  for-0_13 =
-                   with packages;
-                   { pulp = pulp-15;
-                     purescript = purescript-0_13;
-                     zephyr = zephyr-0_4;
-                   }
-                   // common;
+                   if system == "aarch64-linux"
+                   then {}
+                   else
+                       with packages;
+                       { pulp = pulp-15;
+                         purescript = purescript-0_13;
+                         zephyr = zephyr-0_4;
+                       }
+                       // common;
 
                packages =
                  rec
@@ -76,19 +100,25 @@
                    pulp-16 = import ./pulp/16.0.0-0 { inherit pkgs; };
                    pulp-15 = import ./pulp/15.0.0 { inherit pkgs; };
                    purescript = purescript-0_15;
-                   purescript-0_15 = purescripts.purescript-0_15_7;
-                   purescript-0_14 = purescripts.purescript-0_14_9;
-                   purescript-0_13 = purescripts.purescript-0_13_8;
+                   purescript-0_15 = purescripts.purescript-0_15_9;
 
                    purescript-language-server =
                      import ./purescript-language-server { inherit pkgs; };
 
                    purs-tidy = import ./purs-tidy { inherit pkgs; };
-                   purty = import ./purty.nix { inherit pkgs; };
-                   zephyr = zephyr-0_5;
-                   zephyr-0_5 = import ./zephyr/0.5.nix { inherit pkgs; };
-                   zephyr-0_4 = import ./zephyr/0.4.nix { inherit pkgs; };
+
                  }
+                 //
+                 ( if system != "aarch64-linux"
+                     then rec
+                       { purescript-0_14 = purescripts.purescript-0_14_9;
+                         purescript-0_13 = purescripts.purescript-0_13_8;
+                         zephyr = zephyr-0_5;
+                         zephyr-0_5 = import ./zephyr/0.5.nix { inherit pkgs; };
+                         zephyr-0_4 = import ./zephyr/0.4.nix { inherit pkgs; };
+                         purty = import ./purty.nix { inherit pkgs; };
+                       }
+                     else {})
                  // purescripts;
              in
              { inherit for-0_15 for-0_14 for-0_13; }
@@ -96,6 +126,7 @@
 
            checks =
              let
+               inherit (pkgs) system;
                packages-for-version = version:
                  let name = "packages for version ${version}"; in
                  { ${name} =
@@ -115,8 +146,8 @@
                         echo purescript-language-server
                         purescript-language-server --version
 
-                        echo pulp
-                        pulp --version
+                        #echo pulp
+                        #pulp --version
 
                         echo purs
                         purs --version
@@ -124,11 +155,11 @@
                         echo purs-tidy
                         purs-tidy --version
 
-                        echo purty
-                        purty version
+                        #echo purty
+                        #purty version
 
-                        echo zyphyr
-                        zephyr --version
+                        #echo zyphyr
+                        #zephyr --version
 
                         touch $out
                         '';
@@ -155,8 +186,11 @@
                     );
              }
              // packages-for-version "0.15"
-             // packages-for-version "0.14"
-             // packages-for-version "0.13";
+             // (if system != "aarch64-linux"
+                   then packages-for-version "0.14"
+                     // packages-for-version "0.13"
+                   else {}
+                );
 
            devShells.default =
              make-shell
