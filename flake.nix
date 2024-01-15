@@ -1,6 +1,5 @@
 { inputs =
-    { deadnix.url = "github:astro/deadnix";
-      make-shell.url = "github:ursi/nix-make-shell/1";
+    { make-shell.url = "github:ursi/nix-make-shell/1";
       nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
       utils.url = "github:ursi/flake-utils/8";
     };
@@ -11,7 +10,7 @@
       { inherit inputs;
         systems = [ "x86_64-linux" "x86_64-darwin" "aarch64-linux" ];
       }
-      ({ deadnix, make-shell, pkgs, ... }:
+      ({ make-shell, pkgs, ... }:
          let l = pkgs.lib; p = pkgs; in
          rec
          { legacyPackages =
@@ -24,7 +23,7 @@
                       attrNames
                     ]
                  );
-               aarch-systems = ["0.15.9.nix"];
+               aarch-systems = ["0.15.9.nix" "0.15.14.nix"];
                supported-systems =
                  if system == "aarch64-linux"
                    then aarch-systems
@@ -100,7 +99,9 @@
                    pulp-16 = import ./pulp/16.0.0-0 { inherit pkgs; };
                    pulp-15 = import ./pulp/15.0.0 { inherit pkgs; };
                    purescript = purescript-0_15;
-                   purescript-0_15 = purescripts.purescript-0_15_9;
+                   purescript-0_15 = purescripts.purescript-0_15_14;
+#                   purescript-0_14 = purescripts.purescript-0_14_9;
+#                   purescript-0_13 = purescripts.purescript-0_13_8;
 
                    purescript-language-server =
                      import ./purescript-language-server { inherit pkgs; };
@@ -111,7 +112,8 @@
                  //
                  ( if system != "aarch64-linux"
                      then rec
-                       { purescript-0_14 = purescripts.purescript-0_14_9;
+                       { purescript-0_15 = purescripts.purescript-0_15_14;
+                         purescript-0_14 = purescripts.purescript-0_14_9;
                          purescript-0_13 = purescripts.purescript-0_13_8;
                          zephyr = zephyr-0_5;
                          zephyr-0_5 = import ./zephyr/0.5.nix { inherit pkgs; };
@@ -168,7 +170,7 @@
              { lint =
                  p.runCommand "lint" {}
                    ''
-                   ${deadnix}/bin/deadnix -f \
+                   ${p.deadnix}/bin/deadnix -f \
                      $(find ${./flake.nix} ${./purescript}/* -name "*.nix")
 
                    touch $out
@@ -194,7 +196,7 @@
 
            devShells.default =
              make-shell
-               { packages = [ deadnix ] ++ [ legacyPackages.purescript-language-server ];
+               { packages = [ p.deadnix ] ++ [ legacyPackages.purescript-language-server ];
                  aliases.lint = ''deadnix flake.nix purescript/*'';
                };
          }
